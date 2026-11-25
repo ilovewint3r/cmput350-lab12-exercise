@@ -11,6 +11,7 @@
 #include <optional>
 #include <random>
 #include <vector>
+#include <cmath>
 
 #include "aabb.h"
 #include "vector4.h"
@@ -167,6 +168,12 @@ struct BVH {
         }
     }
 
+    void reset() {
+        nodes.clear();
+        nodes.push_back({});
+        constructNode(0, static_cast<int>(indices.size()), 0);
+    }
+
     const std::vector<Circle>* primitives;
     std::vector<int> indices;
     std::vector<BVHNode> nodes;
@@ -196,9 +203,24 @@ bool intersects(sf::Vector2f point, const BVHNode& node, const BVH& bvh, Vector4
 // TODO Q3: store a 2D movement direction for each circle, and write an update() function that
 // moves every circle by its movement.
 struct Scene {
-    std::size_t createCircle(sf::Vector2f position, float radius, const Vector4f& color) {
+    std::size_t createCircle(sf::Vector2f position, float radius, const Vector4f& color, sf::Vector2f direction) {
         circles.push_back({position, radius, color});
+        directions.push_back(direction);
         return circles.size() - 1;
+    }
+
+    void update() {
+        for (std::size_t i = 0; i < circles.size(); i++) {
+            Circle& circle = circles[i];
+            sf::Vector2f& dir = directions[i];
+            circle.position += dir;
+            if (circle.position.x < 0 || circle.position.x > gScreenWidth) {
+                dir.x *= -1;
+            }
+            if (circle.position.y < 0 || circle.position.y > gScreenHeight) {
+                dir.y *= -1;
+            }
+        }
     }
 
     Circle& circle(std::size_t i) {
@@ -209,6 +231,7 @@ struct Scene {
     bool valid(std::size_t i) const { return i < circles.size(); }
 
     std::vector<Circle> circles;
+    std::vector<sf::Vector2f> directions;
 };
 
 void Draw(sf::RenderWindow& window, const AABB<float>& aabb) {
@@ -233,8 +256,10 @@ int main() {
     };
     Scene scene;
     for (int n = 0; n < 100; ++n) {
+        float angle = uniform(0, 2 * 3.14159f);
         scene.createCircle({uniform(0, gScreenWidth), uniform(0, gScreenHeight)}, uniform(10, 20),
-                           {uniform(0, 1), uniform(0, 1), uniform(0, 1), 1});
+                           {uniform(0, 1), uniform(0, 1), uniform(0, 1), 1},
+                           sf::Vector2f{std::cos(angle), std::sin(angle)});
     }
     BVH bvh(scene.circles);
 
@@ -251,14 +276,24 @@ int main() {
         }
 
         // TODO Q3: every frame, call update() on the scene and fullRefit() on the BVH.
+        scene.update();
+        //bvh.fullRefit();
 
         for (int y = 0; y < gScreenHeight; ++y) {
             for (int x = 0; x < gScreenWidth; ++x) {
                 const sf::Vector2f pixel(static_cast<float>(x), static_cast<float>(y));
-                // TODO Q2: antialiasing. Take four samples at offsets of +-0.3333 from the pixel
-                // and average their colors.
                 Vector4f color{};  // stays transparent black on a miss
-                intersects(pixel, bvh.nodes[0], bvh, color);
+                // TODO Q2: antialiasing. Take four samples at offsets of +-0.3333 from the pixel
+                float offset = 0.3333f;
+                for (float x : {-offset, offset}) {
+                    for (float y : {-offset, offset}) {
+                        Vector4f sample{};
+                        intersects(pixel + sf::Vector2f(x, y), bvh.nodes[0], bvh, sample);
+                        color += sample;
+                    }
+                }
+                // and average their colors.
+                color /= 4.f;
                 const std::size_t i = 4 * (static_cast<std::size_t>(y) * gScreenWidth + x);
                 pixels[i + 0] = static_cast<std::uint8_t>(255 * color.x);  // R
                 pixels[i + 1] = static_cast<std::uint8_t>(255 * color.y);  // G
@@ -267,6 +302,7 @@ int main() {
             }
         }        
         // TODO Q4: rebuild the BVH with reset() instead of fullRefit().
+        bvh.reset();
 
         texture.update(pixels.data());
 
@@ -274,7 +310,9 @@ int main() {
         window.draw(sprite);
         // TODO Q1: only draw non-leaf nodes so the BVH structure is easier to see.
         for (const BVHNode& node : bvh.nodes) {
-            Draw(window, node.bounds);
+            if (!node.isLeaf) {
+                Draw(window, node.bounds);
+            }
         }
         window.display();
     }

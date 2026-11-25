@@ -1,5 +1,7 @@
 ﻿Q3. What happens to the bounding boxes with update + fullRefit?
+The boxes resize so that leaves keep the same circles they're built with
 
 Q4. What happens with reset (rebuild every frame) instead?
+Because the tree is being rebuilt at every frame and the circles are in movement, the boxes regroup based on nearby circles
 
 Q5. Why are some circles drawn with their sides cut off?
