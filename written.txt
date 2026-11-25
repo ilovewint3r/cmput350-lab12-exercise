@@ -5,3 +5,4 @@ Q4. What happens with reset (rebuild every frame) instead?
 Because the tree is being rebuilt at every frame and the circles are in movement, the boxes regroup based on nearby circles
 
 Q5. Why are some circles drawn with their sides cut off?
+Happens when bvh is rebuilt instead of refitted: the circles get drawn after they move and before their boxes are updated, so the part of each circle that moved outside is old box gets clipped. Fix is to reset boxes before drawing
